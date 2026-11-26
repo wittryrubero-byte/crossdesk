@@ -105,6 +105,8 @@ jobs:
   build-linux:
     name: Build Linux (${{ matrix.arch }})
     needs: prepare-version
+    # Personal fork: Linux packages are not needed.
+    if: false
     runs-on: ${{ matrix.runner }}
     env:
       LEGAL_VERSION: ${{ needs.prepare-version.outputs.version }}
@@ -238,12 +240,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - arch: x64
-            binary_arch: x86_64
-            runner: macos-26-intel
-            cache-key: intel-macos26-xcode26.6-min14
-            out-dir: ./build/macosx/x86_64/release/crossdesk
-            package_script: ./apps/desktop/scripts/macos/pkg_x64.sh
+          # Personal fork: Apple silicon only.
           - arch: arm64
             binary_arch: arm64
             runner: macos-26
@@ -399,6 +396,8 @@ jobs:
   # iOS (also available as a standalone workflow)
   build-ios:
     name: Build iOS
+    # Personal fork: iOS is not needed.
+    if: false
     uses: ./.github/workflows/build-ios.yml
     with:
       patch: ${{ inputs.patch || '0' }}
@@ -752,3 +751,39 @@ jobs:
           remote_host: ${{ secrets.SERVER_HOST }}
           remote_user: ${{ secrets.SERVER_USER }}
           remote_key: ${{ secrets.SERVER_KEY }}
+
+  # Personal fork: GitHub artifact storage is not reachable from every
+  # network, so collect the installers into a prerelease on this repository.
+  publish-personal:
+    name: Publish personal build
+    needs: [prepare-version, build-macos, build-android, build-windows-x64]
+    if: ${{ !cancelled() && !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download installers
+        uses: actions/download-artifact@v8
+        with:
+          path: dist
+          pattern: crossdesk-*
+          merge-multiple: true
+
+      - name: Create prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION_NUM: ${{ needs.prepare-version.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < <(find dist -type f \( -name '*.pkg' -o -name '*.exe' -o -name '*.zip' -o -name '*.apk' \) ! -name '*unsigned*' | sort)
+          if [[ ${#files[@]} -eq 0 ]]; then
+            echo "::error::No installers were built"
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          tag="personal-${GITHUB_RUN_NUMBER}-${GITHUB_RUN_ATTEMPT}"
+          gh release create "$tag" "${files[@]}" \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
+            --title "Personal build ${VERSION_NUM} (run ${GITHUB_RUN_NUMBER})" \
+            --notes "Built from ${GITHUB_SHA} by run ${GITHUB_RUN_ID}."
