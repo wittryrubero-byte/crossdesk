@@ -240,13 +240,14 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Personal fork: Apple silicon only.
-          - arch: arm64
-            binary_arch: arm64
-            runner: macos-26
-            cache-key: arm-macos26-xcode26.6-min14
-            out-dir: ./build/macosx/arm64/release/crossdesk
-            package_script: ./apps/desktop/scripts/macos/pkg_arm64.sh
+          # Personal fork: hosted Apple silicon runners are rarely available,
+          # so build the Intel package; it runs on Apple silicon via Rosetta.
+          - arch: x64
+            binary_arch: x86_64
+            runner: macos-26-intel
+            cache-key: intel-macos26-xcode26.6-min14
+            out-dir: ./build/macosx/x86_64/release/crossdesk
+            package_script: ./apps/desktop/scripts/macos/pkg_x64.sh
 
     steps:
       - name: Validate macOS signing secrets
@@ -407,6 +408,7 @@ jobs:
   # Android (also available as a standalone workflow)
   build-android:
     name: Build Android
+    if: ${{ !contains(github.event.head_commit.message, '[mac-only]') }}
     uses: ./.github/workflows/build-android.yml
     with:
       patch: ${{ inputs.patch || '0' }}
@@ -417,6 +419,7 @@ jobs:
   build-windows-x64:
     name: Build on Windows x64
     needs: prepare-version
+    if: ${{ !contains(github.event.head_commit.message, '[mac-only]') }}
     runs-on: windows-2022
     env:
       VERSION_NUM: ${{ needs.prepare-version.outputs.version }}
