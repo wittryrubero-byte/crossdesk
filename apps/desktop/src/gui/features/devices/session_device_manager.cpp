@@ -184,10 +184,11 @@ int SessionDeviceManager::InitializeScreenCapturer() {
   last_frame_time_ = {};
   next_frame_deadline_ = {};
   ResetCaptureMetrics();
-  // Keep the shared source ready for either live rate. MiniRTC admits 30/60
-  // frames independently per viewer, so switching never restarts native
-  // capture.
-  const int fps = 60;
+  // Keep the shared source ready for every live rate up to the fastest
+  // display's refresh (60-144 fps). MiniRTC admits frames independently per
+  // viewer at that viewer's own rate, so switching never restarts native
+  // capture, and a 60 fps viewer does not pay for a 144 fps one.
+  const int fps = GuiRuntime::QueryHostMaxVideoFrameRate();
   LOG_INFO("Init screen capturer with {} fps", fps);
   SetDisplayInfoList({});
   registered_display_stream_count_ = 0;

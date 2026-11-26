@@ -1025,6 +1025,11 @@ struct GuiApplication::StreamView {
   std::shared_ptr<slint::VectorModel<slint::SharedString>> resolution_model =
       std::make_shared<slint::VectorModel<slint::SharedString>>();
   DisplayResolutionInfo resolution_choices;
+  std::shared_ptr<slint::VectorModel<slint::SharedString>> frame_rate_model =
+      std::make_shared<slint::VectorModel<slint::SharedString>>(
+          std::vector<slint::SharedString>{"30 fps", "60 fps"});
+  // Frame rates behind frame_rate_model's rows, in the same order.
+  std::vector<int> frame_rate_choices{30, 60};
   std::shared_ptr<slint::VectorModel<ui::NetworkStatsRow>> stats_model =
       std::make_shared<slint::VectorModel<ui::NetworkStatsRow>>();
   WindowDragState drag;
@@ -2541,15 +2546,18 @@ void GuiApplication::BindStreamCallbacks(StreamView& view) {
     if (!props->peer_ ||
         props->connection_status_.load() != MiniRtcConnectionStatus::MiniRtcConnectionConnected)
       return;
+    if (frame_rate_index < 0 ||
+        frame_rate_index >= int(view.frame_rate_choices.size()))
+      return;
     RemoteAction action{};
     action.type = ControlType::video_settings;
-    action.vs = {quality, frame_rate_index == 0 ? 30 : 60, preference};
-    if (frame_rate_index < 0 || frame_rate_index > 1 ||
-        !ValidVideoSettings(action.vs))
-      return;
+    action.vs = {quality, view.frame_rate_choices[frame_rate_index], preference};
+    if (!ValidVideoSettings(action.vs)) return;
     {
       std::lock_guard lock(props->video_settings_mutex_);
-      if (!props->video_settings_supported_) return;
+      if (!props->video_settings_supported_ ||
+          action.vs.frame_rate > props->remote_max_video_frame_rate_)
+        return;
       action.vs.request_id = props->video_settings_.request_id + 1;
       const auto message = action.to_json();
       if (MiniRtcSendReliableDataFrame(props->peer_, message.data(), message.size(),
@@ -4040,6 +4048,7 @@ void GuiApplication::InitializeStreamWindow(StreamView& view) {
   ui_localization::ApplyStreamWindowStrings(stream, localization_language_index_);
   stream->set_displays(view.display_model);
   stream->set_remote_resolutions(view.resolution_model);
+  stream->set_frame_rate_options(view.frame_rate_model);
   stream->set_stats_rows(view.stats_model);
   BindStreamCallbacks(view);
   view.presenter.PrepareWindow(stream, [this, &view] {
@@ -4191,7 +4200,26 @@ void GuiApplication::SyncStreamWindow(StreamView& view) {
         props->video_settings_failed_
             ? localization::video_settings_failed[localization_language_index_] : ""));
     stream->set_video_quality_index(props->video_settings_.quality);
-    stream->set_frame_rate_index(props->video_settings_.frame_rate == 30 ? 0 : 1);
+    {
+      // Offer every supported rate up to the host's refresh ceiling.
+      std::vector<int> choices;
+      std::vector<slint::SharedString> labels;
+      for (int rate : kVideoFrameRates) {
+        if (rate > props->remote_max_video_frame_rate_) break;
+        choices.push_back(rate);
+        labels.emplace_back(std::to_string(rate) + " fps");
+      }
+      if (choices != view.frame_rate_choices) {
+        view.frame_rate_choices = choices;
+        ui::UpdateModelRows(*view.frame_rate_model, std::move(labels));
+      }
+      const auto selected =
+          std::find(choices.begin(), choices.end(),
+                    props->video_settings_.frame_rate);
+      stream->set_frame_rate_index(
+          selected == choices.end() ? int(choices.size()) - 1
+                                    : int(selected - choices.begin()));
+    }
     stream->set_adaptation_policy_index(props->video_settings_.preference);
   }
   view.ObserveWindowState();

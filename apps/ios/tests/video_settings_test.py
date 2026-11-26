@@ -88,6 +88,21 @@ enum VideoSettingsTests {
             state.receive(first, requestID: firstID, accepted: true)
             expect(state.selection == first && !state.failed,
                    "A late confirmation reconciles the actual remote state")
+        } else if test == "high_frame_rate" {
+            let fast = RemoteVideoSettings(quality: 2, frameRate: 120, preference: 0)
+            expect(fast.isValid && !RemoteVideoSettings(quality: 2, frameRate: 75, preference: 0).isValid,
+                   "Only wire frame rates are valid")
+            expect(state.begin(fast) == nil && state.frameRates == [30, 60],
+                   "Hosts that do not advertise a ceiling stay at 60 fps")
+            state.deviceMaxFrameRate = 120
+            state.setHostMaxFrameRate(144)
+            expect(state.maxFrameRate == 120 && state.frameRates == [30, 60, 90, 120],
+                   "The device display caps the host ceiling")
+            let fastID = state.begin(fast)!
+            state.receive(fast, requestID: fastID, accepted: true)
+            expect(state.applied == fast, "120 fps can be confirmed")
+            state.setHostMaxFrameRate(60)
+            expect(state.selection.frameRate == 60, "A lower ceiling clamps the selection")
         } else if test == "unsupported" {
             state.setSupported(false)
             state.receive(first, requestID: firstID, accepted: true)
@@ -127,6 +142,9 @@ enum VideoSettingsTests {
 
     def test_timeout_and_late_confirmation(self):
         self.run_case("timeout")
+
+    def test_high_frame_rate_ceiling(self):
+        self.run_case("high_frame_rate")
 
     def test_unsupported_and_new_session(self):
         self.run_case("unsupported")

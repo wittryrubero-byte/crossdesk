@@ -19,4 +19,15 @@ public class VideoSettingsTest {
         id=state.begin(second);state.setSupported(false);state.receive(second,id,true);state.expire(id);same(first,state.selection);assertFalse(state.failed);assertFalse(state.pending);
     }
 
+    @Test public void highFrameRatesFollowHostAndDeviceCeilings(){
+        RemoteVideoSettings state=new RemoteVideoSettings(1);state.setSupported(true);
+        RemoteVideoSettings.Values fast=new RemoteVideoSettings.Values(2,120,0);
+        assertTrue(fast.valid());assertFalse(new RemoteVideoSettings.Values(2,75,0).valid());
+        assertEquals(-1,state.begin(fast));assertArrayEquals(new int[]{30,60},state.frameRates());
+        state.deviceMaxFrameRate=120;state.setHostMaxFrameRate(144);
+        assertEquals(120,state.maxFrameRate);assertArrayEquals(new int[]{30,60,90,120},state.frameRates());
+        long id=state.begin(fast);assertTrue(id>=0);state.receive(fast,id,true);same(fast,state.applied);
+        state.setHostMaxFrameRate(60);assertEquals(60,state.selection.frameRate);
+        state.setHostMaxFrameRate(0);assertEquals(60,state.maxFrameRate);
+    }
 }

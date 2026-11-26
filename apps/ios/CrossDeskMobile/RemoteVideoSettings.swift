@@ -2,12 +2,20 @@ import Foundation
 
 // Values match crossdesk::VideoSettings on the reliable control stream.
 struct RemoteVideoSettings: Equatable {
+    /// Live rates on the wire; 90/120/144 only when the host advertises them.
+    static let frameRates = [30, 60, 90, 120, 144]
+
+    /// Snaps a refresh ceiling down to a supported rate; unknown values mean 60.
+    static func normalizedMaxFrameRate(_ rate: Int) -> Int {
+        frameRates.last { $0 > 60 && $0 <= rate } ?? 60
+    }
+
     var quality = 2
     var frameRate = 60
     var preference = 1
 
     var isValid: Bool {
-        (0...2).contains(quality) && [30, 60].contains(frameRate) &&
+        (0...2).contains(quality) && Self.frameRates.contains(frameRate) &&
             (0...2).contains(preference)
     }
 }
@@ -20,11 +28,23 @@ struct RemoteVideoSettingsState {
     private(set) var pending = false
     private(set) var failed = false
     private var appliedRequestID: UInt32 = 0
+    /// min(host ceiling, this device's fastest refresh); 60 until the host reports.
+    private(set) var maxFrameRate = 60
+    /// Fastest refresh of this device's screen, e.g. 120 on ProMotion displays.
+    var deviceMaxFrameRate = 60
+
+    var frameRates: [Int] { RemoteVideoSettings.frameRates.filter { $0 <= maxFrameRate } }
 
     init(preference: Int = 1) {
         let settings = RemoteVideoSettings(preference: preference)
         selection = settings
         applied = settings
+    }
+
+    mutating func setHostMaxFrameRate(_ hostMax: Int) {
+        maxFrameRate = min(RemoteVideoSettings.normalizedMaxFrameRate(hostMax),
+                           RemoteVideoSettings.normalizedMaxFrameRate(deviceMaxFrameRate))
+        if selection.frameRate > maxFrameRate { selection.frameRate = maxFrameRate }
     }
 
     mutating func setSupported(_ value: Bool) {
@@ -37,7 +57,7 @@ struct RemoteVideoSettingsState {
     }
 
     mutating func begin(_ settings: RemoteVideoSettings) -> UInt32? {
-        guard supported, settings.isValid else { return nil }
+        guard supported, settings.isValid, settings.frameRate <= maxFrameRate else { return nil }
         requestID &+= 1
         selection = settings
         pending = true

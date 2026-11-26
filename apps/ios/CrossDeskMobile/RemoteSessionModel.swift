@@ -1504,9 +1504,12 @@ final class RemoteSessionModel: NSObject, ObservableObject, CrossDeskRTCBridgeDe
                    displayNames remoteDisplayNames: [String],
                    displaySizes remoteDisplaySizes: [NSValue],
                    supportsVideoSettings: Bool,
-                   supportsTextInput: Bool) {
+                   supportsTextInput: Bool,
+                   maxVideoFrameRate: Int) {
         self.supportsTextInput = supportsTextInput
         let previouslySupported = videoSettings.supported
+        videoSettings.deviceMaxFrameRate = UIScreen.main.maximumFramesPerSecond
+        videoSettings.setHostMaxFrameRate(maxVideoFrameRate)
         videoSettings.setSupported(supportsVideoSettings)
         if !supportsVideoSettings {
             videoSettingsTimeoutTask?.cancel()

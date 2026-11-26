@@ -425,6 +425,8 @@ export component StreamWindow inherits Window {
     in property <string> video-settings-feedback: "";
     in-out property <int> video-quality-index: 2;
     in-out property <int> frame-rate-index: 1;
+    // Supplied by the application from the host's advertised refresh ceiling.
+    in property <[string]> frame-rate-options: ["30 fps", "60 fps"];
     in-out property <int> adaptation-policy-index: 1;
     callback change-video-settings(int, int, int);
     in-out property <float> mouse-sensitivity-percent: 100;
@@ -1870,7 +1872,7 @@ export component StreamWindow inherits Window {
                             choose(index) => { root.change-video-settings(index, root.frame-rate-index, root.adaptation-policy-index); }
                         }
                         VideoSettingRow {
-                            label: StreamStrings.frame-rate; options: ["30 fps", "60 fps"];
+                            label: StreamStrings.frame-rate; options: root.frame-rate-options;
                             selected: root.frame-rate-index; enabled: root.video-settings-enabled;
                             choose(index) => { root.change-video-settings(root.video-quality-index, index, root.adaptation-policy-index); }
                         }

@@ -430,6 +430,7 @@ void PeerEventHandler::DispatchConnectionStatus(MiniRtcConnectionStatus status,
         {
           std::lock_guard lock(props->video_settings_mutex_);
           props->video_settings_supported_ = false;
+          props->remote_max_video_frame_rate_ = kLegacyMaxVideoFrameRate;
           props->video_settings_pending_ = false;
           props->video_settings_failed_ = false;
         }
@@ -656,6 +657,7 @@ std::string GuiRuntime::BuildHostInformation(bool advertise_trust,
   action.i.supports_deskhub_resolution = true;
   action.i.supports_deskhub_fps15 = true;
   action.i.supports_deskhub_bandwidth = true;
+  action.i.max_video_frame_rate = QueryHostMaxVideoFrameRate();
   action.i.supports_file_browser = UserSessionFeaturesAvailable();
 #ifndef __OHOS__
   action.i.supports_file_clipboard = UserSessionFeaturesAvailable();

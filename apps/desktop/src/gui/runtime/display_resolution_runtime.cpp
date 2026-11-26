@@ -2,6 +2,9 @@
 
 #include <SDL3/SDL_timer.h>
 
+#include <algorithm>
+#include <cmath>
+
 #include "rd_log.h"
 
 #ifdef _WIN32
@@ -33,6 +36,45 @@ std::vector<DisplayResolutionInfo> GuiRuntime::QueryHostDisplayResolutions() {
 #else
   return {};
 #endif
+}
+
+int GuiRuntime::QueryHostMaxVideoFrameRate() {
+  int max_refresh_hz = 0;
+#ifdef _WIN32
+  std::lock_guard lock(native_display_resolution_mutex);
+  DISPLAY_DEVICEW device{};
+  device.cb = sizeof(device);
+  for (DWORD index = 0; EnumDisplayDevicesW(nullptr, index, &device, 0);
+       ++index, device = {}, device.cb = sizeof(device)) {
+    if (!(device.StateFlags & DISPLAY_DEVICE_ATTACHED_TO_DESKTOP)) continue;
+    DEVMODEW mode{};
+    mode.dmSize = sizeof(mode);
+    if (!EnumDisplaySettingsW(device.DeviceName, ENUM_CURRENT_SETTINGS, &mode))
+      continue;
+    // 0 and 1 mean "hardware default"; treat them as unknown.
+    if (mode.dmDisplayFrequency > 1)
+      max_refresh_hz =
+          (std::max)(max_refresh_hz, static_cast<int>(mode.dmDisplayFrequency));
+  }
+#elif defined(__APPLE__)
+  std::lock_guard lock(native_display_resolution_mutex);
+  CGDirectDisplayID displays[16];
+  uint32_t count = 0;
+  if (CGGetActiveDisplayList(16, displays, &count) == kCGErrorSuccess) {
+    for (uint32_t i = 0; i < count; ++i) {
+      CGDisplayModeRef mode = CGDisplayCopyDisplayMode(displays[i]);
+      if (!mode) continue;
+      // Some built-in panels report 0; ProMotion reports up to 120.
+      const double refresh = CGDisplayModeGetRefreshRate(mode);
+      CGDisplayModeRelease(mode);
+      if (refresh > 1.0)
+        max_refresh_hz =
+            (std::max)(max_refresh_hz, static_cast<int>(std::lround(refresh)));
+    }
+  }
+#endif
+  // Unknown refresh rates keep the legacy 60 fps ceiling.
+  return NormalizeMaxVideoFrameRate(max_refresh_hz > 0 ? max_refresh_hz : 60);
 }
 
 void GuiRuntime::QueueDisplayResolutionChange(

@@ -774,7 +774,8 @@ MiniRtcParams MakeParams(const RTCState &state, const std::string &user_id,
                           frameRate:(NSInteger)frameRate
                          preference:(NSInteger)preference
                           requestID:(uint32_t)requestID {
-  if (quality < 0 || quality > 2 || (frameRate != 30 && frameRate != 60) ||
+  if (quality < 0 || quality > 2 ||
+      !crossdesk::ValidVideoFrameRate(static_cast<int>(frameRate)) ||
       preference < 0 || preference > 2) return;
   const uint64_t generation = _activeControllerGeneration.load();
   dispatch_async(_rtcQueue, ^{
@@ -1948,6 +1949,8 @@ MiniRtcParams MakeParams(const RTCState &state, const std::string &user_id,
     if (action.type != ControlType::host_infomation) return;
     const BOOL supports_video_settings = action.i.supports_video_settings;
     const BOOL supports_text_input = action.i.supports_text_input;
+    const NSInteger max_video_frame_rate =
+        crossdesk::NormalizeMaxVideoFrameRate(action.i.max_video_frame_rate);
     NSString *platform = [NSString stringWithUTF8String:
         crossdesk::HostPlatformName(action.i.platform)];
     NSString *host_name = [[NSString alloc]
@@ -1980,7 +1983,8 @@ MiniRtcParams MakeParams(const RTCState &state, const std::string &user_id,
       id<CrossDeskRTCBridgeDelegate> delegate = self.delegate;
       if ([delegate respondsToSelector:
               @selector(rtcBridge:didReceiveHostName:appVersion:platform:displayNames:
-                                  displaySizes:supportsVideoSettings:supportsTextInput:)]) {
+                                  displaySizes:supportsVideoSettings:supportsTextInput:
+                                  maxVideoFrameRate:)]) {
         [delegate rtcBridge:self
             didReceiveHostName:host_name ?: @""
                     appVersion:app_version ?: @""
@@ -1988,7 +1992,8 @@ MiniRtcParams MakeParams(const RTCState &state, const std::string &user_id,
                   displayNames:display_names
                   displaySizes:display_sizes
          supportsVideoSettings:supports_video_settings
-             supportsTextInput:supports_text_input];
+             supportsTextInput:supports_text_input
+             maxVideoFrameRate:max_video_frame_rate];
       }
     });
     return;

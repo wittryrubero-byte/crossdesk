@@ -115,7 +115,11 @@ final class SessionControls extends FrameLayout {
     void videoSize(int width,int height){waiting.setVisibility(GONE);positionMouse();}
     void resetVideoStatistics(){statistics(new RemoteNetworkStatistics.Snapshot(network.report,0,0,0,Double.NaN,network.rtt,network.remoteEncoder,network.localDecoder));}
     void statistics(RemoteNetworkStatistics.Snapshot value){network=value;renderNetwork();}
-    void videoSettings(RemoteVideoSettings value){settings=value;renderVideoSettings();}
+    void videoSettings(RemoteVideoSettings value){
+        settings=value;
+        for(SettingRow row:settingRows)if(row.field==1&&!java.util.Arrays.equals(row.values,value.frameRates())){openMenu(menuPage);return;}
+        renderVideoSettings();
+    }
     void displayResolutions(RemoteDisplayResolutions value,int display){resolutions=value;resolutionDisplay=display;renderResolutions();}
     void privacyScreen(RemotePrivacyScreen value){privacy=value;renderPrivacy();}
     void fileStatus(String status,boolean received){transferStatus=status;hasReceivedFile=received;renderFileStatus();}
@@ -177,7 +181,8 @@ final class SessionControls extends FrameLayout {
             resolutionButton=ui.action("",INK,this::chooseResolution);resolutionButton.setTextSize(13);resolutionButton.setBackground(ui.background(0xFFF0F0F2,7));body.addView(resolutionButton,ui.size(-1,34));
             resolutionFeedback=ui.text("",12,false);resolutionFeedback.setTextColor(SECONDARY);resolutionFeedback.setAccessibilityLiveRegion(ACCESSIBILITY_LIVE_REGION_POLITE);body.addView(resolutionFeedback);ui.gap(body,12);renderResolutions();
             settingRows.add(new SettingRow(body,0,L10n.tr("画面质量"),new String[]{L10n.tr("低"),L10n.tr("中"),L10n.tr("高")},new int[]{0,1,2}));ui.gap(body,12);
-            settingRows.add(new SettingRow(body,1,L10n.tr("画面采集帧率"),new String[]{"30 fps","60 fps"},new int[]{30,60}));ui.gap(body,12);
+            int[] rates=settings.frameRates();String[] rateLabels=new String[rates.length];for(int i=0;i<rates.length;i++)rateLabels[i]=rates[i]+" fps";
+            settingRows.add(new SettingRow(body,1,L10n.tr("画面采集帧率"),rateLabels,rates));ui.gap(body,12);
             settingRows.add(new SettingRow(body,2,L10n.tr("画面偏好"),RemoteVideoSettings.preferences(),new int[]{0,1,2}));renderVideoSettings();
         }
         ui.gap(menu,9);TextView disconnect=ui.action(L10n.tr("断开连接"),Color.WHITE,()->{closeMenu();closeKeyboard();actions.disconnect();});disconnect.setMinHeight(ui.dp(34));disconnect.setTextSize(14);disconnect.setBackground(ui.background(RED,8));menu.addView(disconnect,ui.size(-1,34));

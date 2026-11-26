@@ -157,6 +157,9 @@ class GuiRuntime : protected gui_detail::GuiState {
   void ApplyPrivacyAdmission(bool automatic_enable);
   void QueuePrivacyCommand(const std::string& remote_id, const PrivacyCommand& command);
   std::vector<DisplayResolutionInfo> QueryHostDisplayResolutions();
+  // Highest live video frame rate this host can usefully send: the fastest
+  // active display refresh rate, snapped to a wire-supported value (60-144).
+  static int QueryHostMaxVideoFrameRate();
   void QueueDisplayResolutionChange(const std::string& id,
                                     PeerEventHandler* source,
                                     const DisplayResolutionChange& change);

@@ -515,6 +515,13 @@ void PeerEventHandler::OnReceiveDataBuffer(
         props->preview_bandwidth_supported_ = remote_action.i.supports_deskhub_bandwidth;
         props->video_settings_supported_ =
             remote_action.i.supports_video_settings;
+        props->remote_max_video_frame_rate_ =
+            NormalizeMaxVideoFrameRate(remote_action.i.max_video_frame_rate);
+        // Never request more than this host advertises (legacy hosts: 60).
+        if (props->video_settings_.frame_rate >
+            props->remote_max_video_frame_rate_)
+          props->video_settings_.frame_rate =
+              props->remote_max_video_frame_rate_;
         if (first_advertisement && props->video_settings_supported_) {
           RemoteAction settings{};
           settings.type = ControlType::video_settings;

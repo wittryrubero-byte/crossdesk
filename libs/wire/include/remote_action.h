@@ -152,6 +152,9 @@ struct HostInfo {
   bool supports_file_browser;
   bool supports_file_clipboard;
   int file_clipboard_version;
+  // Optional; highest live frame rate the host can capture and encode.
+  // Absent or invalid values mean the legacy 60 fps ceiling.
+  int max_video_frame_rate;
 };
 
 struct ServiceStatus {
@@ -184,7 +187,7 @@ struct PrivacyStatus {
 
 struct VideoSettings {
   int quality;     // 0: low, 1: medium, 2: high
-  int frame_rate;  // 30 or 60
+  int frame_rate;  // 30 or 60; 90/120/144 when the host advertises them
   int preference;  // 0: frame rate, 1: quality, 2: balanced
   uint32_t request_id;
   bool accepted;  // Only meaningful in video_settings_status.
@@ -194,9 +197,29 @@ struct VideoCodecStatus {
   char encoder[128];
 };
 
+inline constexpr int kLegacyMaxVideoFrameRate = 60;
+inline constexpr int kMaxVideoFrameRate = 144;
+inline constexpr int kVideoFrameRates[] = {30, 60, 90, 120, 144};
+
+inline constexpr bool ValidVideoFrameRate(int frame_rate) {
+  for (int supported : kVideoFrameRates)
+    if (supported == frame_rate) return true;
+  return false;
+}
+
+// Normalizes an advertised host ceiling: legacy/invalid values become 60 and
+// anything else snaps down to a supported rate.
+inline constexpr int NormalizeMaxVideoFrameRate(int frame_rate) {
+  int normalized = kLegacyMaxVideoFrameRate;
+  for (int supported : kVideoFrameRates)
+    if (supported > normalized && supported <= frame_rate)
+      normalized = supported;
+  return normalized;
+}
+
 inline bool ValidVideoSettings(const VideoSettings& settings) {
   return settings.quality >= 0 && settings.quality <= 2 &&
-         (settings.frame_rate == 30 || settings.frame_rate == 60) &&
+         ValidVideoFrameRate(settings.frame_rate) &&
          settings.preference >= 0 && settings.preference <= 2;
 }
 

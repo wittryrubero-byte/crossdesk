@@ -90,7 +90,8 @@ typedef struct {
           displayNames:(NSArray<NSString *> *)displayNames
           displaySizes:(NSArray<NSValue *> *)displaySizes
  supportsVideoSettings:(BOOL)supportsVideoSettings
-     supportsTextInput:(BOOL)supportsTextInput;
+     supportsTextInput:(BOOL)supportsTextInput
+     maxVideoFrameRate:(NSInteger)maxVideoFrameRate;
 - (void)rtcBridge:(CrossDeskRTCBridge *)bridge
     didReceiveVideoSettingsQuality:(NSInteger)quality
                         frameRate:(NSInteger)frameRate

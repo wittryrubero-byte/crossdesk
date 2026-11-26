@@ -1586,8 +1586,9 @@ private struct FloatingVideoSettings: View {
                         get: { session.videoSettings.selection.quality },
                         set: { session.updateVideoSettings(quality: $0) }
                        ))
-            settingRow(NSLocalizedString("画面采集帧率", comment: ""), options: ["30 fps", "60 fps"],
-                       values: [30, 60], selection: Binding(
+            settingRow(NSLocalizedString("画面采集帧率", comment: ""),
+                       options: session.videoSettings.frameRates.map { "\($0) fps" },
+                       values: session.videoSettings.frameRates, selection: Binding(
                         get: { session.videoSettings.selection.frameRate },
                         set: { session.updateVideoSettings(frameRate: $0) }
                        ))

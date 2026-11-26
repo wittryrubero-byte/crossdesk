@@ -255,8 +255,18 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         }
     }
     @Override public boolean performClick() { super.performClick(); return true; }
-    @Override public void surfaceCreated(SurfaceHolder holder) { session.surface(holder.getSurface()); }
+    @Override public void surfaceCreated(SurfaceHolder holder) { session.surface(holder.getSurface()); applySurfaceFrameRate(); }
     @Override public void surfaceChanged(SurfaceHolder holder,int format,int width,int height) { }
+    private int surfaceFrameRate;
+    /** Ask the compositor to run the panel at the stream rate (0 = no preference). */
+    void setSurfaceFrameRate(int fps){ if (surfaceFrameRate == fps) return; surfaceFrameRate = fps; applySurfaceFrameRate(); }
+    private void applySurfaceFrameRate(){
+        if (android.os.Build.VERSION.SDK_INT < 30) return;
+        android.view.Surface surface = video.getHolder().getSurface();
+        if (surface == null || !surface.isValid()) return;
+        try { surface.setFrameRate(surfaceFrameRate, android.view.Surface.FRAME_RATE_COMPATIBILITY_DEFAULT); }
+        catch (IllegalArgumentException | IllegalStateException ignored) { }
+    }
     @Override public void surfaceDestroyed(SurfaceHolder holder) { releaseMouse(); session.surface(null); }
     @Override protected void onDetachedFromWindow() { releaseMouse(); super.onDetachedFromWindow(); }
     private final class Cursor extends View {

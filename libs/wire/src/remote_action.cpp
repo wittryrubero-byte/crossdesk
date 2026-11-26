@@ -103,6 +103,7 @@ void ResetHostInfo(HostInfo& info) {
   info.supports_file_browser = false;
   info.supports_file_clipboard = false;
   info.file_clipboard_version = 0;
+  info.max_video_frame_rate = kLegacyMaxVideoFrameRate;
 }
 
 void CopyHostName(HostInfo& info, const std::string& host_name) {
@@ -346,7 +347,9 @@ std::string RemoteAction::ToJson(const RemoteAction& action) {
           {"supports_deskhub_bandwidth", action.i.supports_deskhub_bandwidth},
           {"supports_file_browser", action.i.supports_file_browser},
           {"supports_file_clipboard", action.i.supports_file_clipboard},
-          {"file_clipboard_version", action.i.file_clipboard_version}};
+          {"file_clipboard_version", action.i.file_clipboard_version},
+          {"max_video_frame_rate",
+           NormalizeMaxVideoFrameRate(action.i.max_video_frame_rate)}};
       if (!action.display_resolutions.empty())
         object["host_info"]["display_resolutions"] =
             DisplayResolutionsJson(action.display_resolutions);
@@ -492,7 +495,7 @@ bool RemoteAction::FromJson(const std::string& json_string,
         for (const auto* field : {"quality", "frame_rate", "preference"}) {
           if (!settings.at(field).is_number_integer()) return false;
           const auto value = settings.at(field).get<int64_t>();
-          if (value < 0 || value > 60) return false;
+          if (value < 0 || value > kMaxVideoFrameRate) return false;
         }
         output.vs = {settings.at("quality").get<int>(),
                      settings.at("frame_rate").get<int>(),
@@ -609,6 +612,16 @@ bool RemoteAction::FromJson(const std::string& json_string,
         output.i.supports_file_clipboard =
             host_info_object.value("supports_file_clipboard", false);
         output.i.file_clipboard_version = host_info_object.value("file_clipboard_version", 0);
+        {
+          const auto max_rate = host_info_object.find("max_video_frame_rate");
+          output.i.max_video_frame_rate =
+              max_rate != host_info_object.end() &&
+                      max_rate->is_number_integer() &&
+                      max_rate->get<int64_t>() > 0 &&
+                      max_rate->get<int64_t>() <= kMaxVideoFrameRate
+                  ? NormalizeMaxVideoFrameRate(max_rate->get<int>())
+                  : kLegacyMaxVideoFrameRate;
+        }
         const std::string host_name =
             host_info_object.at("host_name").get<std::string>();
         CopyHostName(output.i, host_name);

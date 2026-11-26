@@ -305,5 +305,43 @@ int main() {
                    crossdesk::ResolveDisplayStreamId("invalid", 3, 1) ==
                        "Display2",
                "display stream fallback changed");
+  // High-refresh video settings and the host's advertised ceiling.
+  ok &= Expect(crossdesk::ValidVideoFrameRate(30) &&
+                   crossdesk::ValidVideoFrameRate(144) &&
+                   !crossdesk::ValidVideoFrameRate(75) &&
+                   crossdesk::NormalizeMaxVideoFrameRate(0) == 60 &&
+                   crossdesk::NormalizeMaxVideoFrameRate(165) == 144 &&
+                   crossdesk::NormalizeMaxVideoFrameRate(100) == 90,
+               "video frame rate helpers");
+  {
+    crossdesk::RemoteAction settings{};
+    settings.type = crossdesk::ControlType::video_settings;
+    settings.vs = {2, 144, 0, 7, false};
+    crossdesk::RemoteAction parsed{};
+    ok &= Expect(parsed.from_json(settings.to_json()) &&
+                     parsed.vs.frame_rate == 144 && parsed.vs.request_id == 7,
+                 "144 fps video settings should round-trip");
+    settings.vs.frame_rate = 75;
+    crossdesk::RemoteAction rejected{};
+    ok &= Expect(!rejected.from_json(settings.to_json()),
+                 "unsupported frame rates should be rejected");
+  }
+  {
+    auto host = crossdesk::MakeHostInformation("host", {}, false, "1.0.0",
+                                               crossdesk::HostPlatform::Windows);
+    crossdesk::RemoteAction legacy{};
+    ok &= Expect(legacy.from_json(host.to_json()) &&
+                     legacy.i.max_video_frame_rate == 60,
+                 "default host frame-rate ceiling should be 60");
+    crossdesk::FreeRemoteAction(legacy);
+    host.i.max_video_frame_rate = 144;
+    crossdesk::RemoteAction high{};
+    ok &= Expect(high.from_json(host.to_json()) &&
+                     high.i.max_video_frame_rate == 144,
+                 "host frame-rate ceiling should round-trip");
+    crossdesk::FreeRemoteAction(high);
+    crossdesk::FreeRemoteAction(host);
+  }
+
   return ok ? 0 : 1;
 }

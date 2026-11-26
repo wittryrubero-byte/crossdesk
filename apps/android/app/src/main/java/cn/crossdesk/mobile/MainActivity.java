@@ -576,7 +576,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         if(progressDialog!=null){progressDialog.dismiss();progressDialog=null;}
         if(session!=null){releaseKeys();session.close();session=null;}
         if(!foreground)stopSignaling();
-        pendingPassword="";remoteClipboard="";hostPlatform="";displays=new JSONArray();ready=false;video=null;controls=null;getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        pendingPassword="";remoteClipboard="";hostPlatform="";displays=new JSONArray();ready=false;if(video!=null)video.setSurfaceFrameRate(0);video=null;controls=null;applyDisplayRefresh(0);getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         if(closeWindow){finish();return;}
         home(reason);
         appUpdates.checkNow();
@@ -930,6 +930,22 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelVideoSettingsTimeout();
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
         videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
+        videoSettings.deviceMaxFrameRate=displayMaxRefreshRate();
+    }
+    /** Fastest refresh rate the panel offers (e.g. 120 on high-refresh phones). */
+    @SuppressWarnings("deprecation") private int displayMaxRefreshRate(){
+        android.view.Display display=android.os.Build.VERSION.SDK_INT>=30?getDisplay():getWindowManager().getDefaultDisplay();
+        if(display==null)return 60;
+        float max=display.getRefreshRate();
+        for(android.view.Display.Mode mode:display.getSupportedModes())max=Math.max(max,mode.getRefreshRate());
+        return Math.round(max);
+    }
+    /** Run the panel at the stream rate above 60 fps; 0 restores the system default. */
+    private void applyDisplayRefresh(int fps){
+        int rate=fps>60?fps:0;
+        WindowManager.LayoutParams attributes=getWindow().getAttributes();
+        if(attributes.preferredRefreshRate!=rate){attributes.preferredRefreshRate=rate;getWindow().setAttributes(attributes);}
+        if(video!=null)video.setSurfaceFrameRate(rate);
     }
     private void updateVideoSettings(RemoteVideoSettings.Values value){
         if(!ready||session==null||!preferences.getBoolean("networkConsent",false))return;
@@ -947,12 +963,12 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             if(message.optInt("type",-1)==16)return;
         }
         if(message.optInt("type",-1)==5){JSONObject service=message.optJSONObject("service_status");remoteServiceAvailable=service!=null&&service.optBoolean("available",false);return;}
-        if(message.optInt("type",-1)==12){if(!ready)return;videoSettings.receive(message);if(!videoSettings.pending)cancelVideoSettingsTimeout();if(controls!=null)controls.videoSettings(videoSettings);return;}
+        if(message.optInt("type",-1)==12){if(!ready)return;videoSettings.receive(message);if(!videoSettings.pending)cancelVideoSettingsTimeout();if(controls!=null)controls.videoSettings(videoSettings);applyDisplayRefresh(videoSettings.applied.frameRate);return;}
         JSONObject info=message.optJSONObject("host_info");
         if(info!=null){
             hostPlatform=info.optString("platform","");JSONArray list=info.optJSONArray("displays");if(list!=null)displays=list;history.metadata(serverKey(),connectedRemote,info.optString("host_name"),hostPlatform);
             if(controls!=null)controls.setHostPlatform(hostPlatform);
-            boolean wasSupported=videoSettings.supported;videoSettings.setSupported(info.optBoolean("supports_video_settings",false));
+            boolean wasSupported=videoSettings.supported;videoSettings.setHostMaxFrameRate(info.optInt("max_video_frame_rate",60));videoSettings.setSupported(info.optBoolean("supports_video_settings",false));
             if(!videoSettings.supported)cancelVideoSettingsTimeout();
             if(controls!=null)controls.videoSettings(videoSettings);
             if(videoSettings.supported&&!wasSupported)updateVideoSettings(videoSettings.selection);

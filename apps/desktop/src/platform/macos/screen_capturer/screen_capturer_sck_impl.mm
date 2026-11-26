@@ -794,6 +794,9 @@ void ScreenCapturerSckImpl::OnShareableContentCreated(SCShareableContent *conten
   config.height = filter.contentRect.size.height * filter.pointPixelScale;
   config.captureResolution = SCCaptureResolutionAutomatic;
   config.minimumFrameInterval = CMTimeMake(1, fps_);
+  // The default 3-surface queue starves while the encoder still holds
+  // frames at high refresh rates; ScreenCaptureKit allows up to 8.
+  if (fps_ > 60) config.queueDepth = 6;
 
   std::unique_lock<std::mutex> lock(lock_);
   if (!capture_requested_ || generation != configuration_generation_) return;

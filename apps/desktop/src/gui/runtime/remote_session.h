@@ -197,6 +197,8 @@ struct RemoteSession {
   // Requested and confirmed settings for this remote session only.
   VideoSettings video_settings_{2, 60, 1};
   bool video_settings_supported_ = false;
+  // Host's advertised live frame-rate ceiling; 60 for legacy hosts.
+  int remote_max_video_frame_rate_ = kLegacyMaxVideoFrameRate;
   VideoSettings applied_video_settings_{2, 60, 1, 0, false};
   bool video_settings_pending_ = false;
   bool video_settings_failed_ = false;

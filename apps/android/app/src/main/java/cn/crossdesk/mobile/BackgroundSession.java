@@ -73,7 +73,10 @@ final class BackgroundSession implements NativeSession.Listener {
         if (info != null) {
             platform = info.optString("platform", "");
             JSONArray values = info.optJSONArray("displays"); if (values != null) displays = values;
-            if (videoSettings != null) videoSettings.setSupported(info.optBoolean("supports_video_settings", false));
+            if (videoSettings != null) {
+                videoSettings.setHostMaxFrameRate(info.optInt("max_video_frame_rate", 60));
+                videoSettings.setSupported(info.optBoolean("supports_video_settings", false));
+            }
         }
     }
     @Override public void videoSize(int w, int h) {
