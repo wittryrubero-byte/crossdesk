@@ -54,7 +54,7 @@ final class NativeSession implements AutoCloseable {
     private final int port;
     private long handle;
     private boolean signalReady, joining, started;
-    private volatile boolean connected, supportsTextInput;
+    private volatile boolean connected, supportsTextInput, supportsPreciseWheel;
     final RemotePrivacyScreen privacyScreen = new RemotePrivacyScreen();
     private int signalState;
     private volatile long signalGeneration;
@@ -231,7 +231,7 @@ final class NativeSession implements AutoCloseable {
                         return;
                     }
                     JSONObject info=event.optJSONObject("host_info");
-                    if(info!=null)supportsTextInput=info.optBoolean("supports_text_input",false);
+                    if(info!=null){supportsTextInput=info.optBoolean("supports_text_input",false);supportsPreciseWheel=info.optBoolean("supports_precise_wheel",false);}
                     ui(() -> {
                         if(event.optInt("type",-1)==10){
                             privacyScreen.receive(event,android.os.SystemClock.elapsedRealtime());
@@ -297,6 +297,8 @@ final class NativeSession implements AutoCloseable {
         });
     }
     void surface(Surface value) { execute(() -> { surface = value; if (handle != 0) nSurface(handle, value); }); }
+    /** Host accepts smooth (1/120 notch) wheel flags 9/10. */
+    boolean supportsPreciseWheel() { return supportsPreciseWheel; }
     void pointer(float x, float y, int flag, int wheel) { execute(() -> { if (connected) nPointer(handle, x, y, flag, wheel); }); }
     void key(int code, boolean down) { execute(() -> { if (connected) nKey(handle, code, down); }); }
     void chord(int code,int[] modifiers) {

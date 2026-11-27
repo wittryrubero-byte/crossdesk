@@ -334,13 +334,29 @@ int main() {
                      legacy.i.max_video_frame_rate == 60,
                  "default host frame-rate ceiling should be 60");
     crossdesk::FreeRemoteAction(legacy);
+    ok &= Expect(!legacy.i.supports_precise_wheel,
+                 "precise wheel support should default to off");
     host.i.max_video_frame_rate = 144;
+    host.i.supports_precise_wheel = true;
     crossdesk::RemoteAction high{};
     ok &= Expect(high.from_json(host.to_json()) &&
-                     high.i.max_video_frame_rate == 144,
-                 "host frame-rate ceiling should round-trip");
+                     high.i.max_video_frame_rate == 144 &&
+                     high.i.supports_precise_wheel,
+                 "host frame-rate ceiling and precise wheel should round-trip");
     crossdesk::FreeRemoteAction(high);
     crossdesk::FreeRemoteAction(host);
+  }
+
+  {
+    crossdesk::RemoteAction wheel{};
+    wheel.type = crossdesk::ControlType::mouse;
+    wheel.m = {0.5f, 0.5f, -37, crossdesk::MouseFlag::wheel_vertical_precise};
+    crossdesk::RemoteAction parsed{};
+    ok &= Expect(static_cast<int>(crossdesk::MouseFlag::wheel_vertical_precise) == 9 &&
+                     static_cast<int>(crossdesk::MouseFlag::wheel_horizontal_precise) == 10 &&
+                     parsed.from_json(wheel.to_json()) && parsed.m.s == -37 &&
+                     parsed.m.flag == crossdesk::MouseFlag::wheel_vertical_precise,
+                 "precise wheel should round-trip");
   }
 
   return ok ? 0 : 1;

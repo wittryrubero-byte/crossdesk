@@ -47,6 +47,9 @@ class PlatformMouseController final : public MouseController {
   bool left_dragging_ = false;
   bool right_dragging_ = false;
   unsigned pressed_buttons_ = 0;
+  // Sub-pixel carry for precise (smooth) wheel input, per axis.
+  double scroll_remainder_x_ = 0;
+  double scroll_remainder_y_ = 0;
   ClickTracker left_click_tracker_;
   ClickTracker right_click_tracker_;
   ClickTracker middle_click_tracker_;

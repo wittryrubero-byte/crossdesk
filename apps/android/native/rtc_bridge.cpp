@@ -427,7 +427,8 @@ extern "C" JNIEXPORT void JNICALL JNI_METHOD(nReady)(JNIEnv* env, jclass, jlong 
 }
 extern "C" JNIEXPORT void JNICALL JNI_METHOD(nPointer)(
     JNIEnv*, jclass, jlong handle, jfloat x, jfloat y, jint flag, jint wheel) {
-  auto* s = From(handle); if (!s || flag < 0 || flag > 8) return;
+  // 9/10 are the precise wheel flags, sent only to hosts that advertise them.
+  auto* s = From(handle); if (!s || flag < 0 || flag > 10) return;
   RemoteAction action{}; action.type = mouse;
   action.m = {std::clamp(x, 0.f, 1.f), std::clamp(y, 0.f, 1.f), wheel, static_cast<MouseFlag>(flag)};
   s->pointer_x = action.m.x; s->pointer_y = action.m.y;

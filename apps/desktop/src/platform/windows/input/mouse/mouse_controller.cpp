@@ -116,6 +116,17 @@ int PlatformMouseController::SendMouseCommand(RemoteAction remote_action,
       ip.mi.dwFlags = MOUSEEVENTF_HWHEEL;
       ip.mi.mouseData = remote_action.m.s * 120;
       break;
+    // Smooth scrolling: s is already in WHEEL_DELTA (1/120 notch) units.
+    case MouseFlag::wheel_vertical_precise:
+      ip.mi.dwFlags = MOUSEEVENTF_WHEEL;
+      ip.mi.mouseData = std::clamp(remote_action.m.s, -10 * kWheelDelta,
+                                   10 * kWheelDelta);
+      break;
+    case MouseFlag::wheel_horizontal_precise:
+      ip.mi.dwFlags = MOUSEEVENTF_HWHEEL;
+      ip.mi.mouseData = std::clamp(remote_action.m.s, -10 * kWheelDelta,
+                                   10 * kWheelDelta);
+      break;
     default:
       break;
   }

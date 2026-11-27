@@ -9,6 +9,9 @@ import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
+import android.view.Choreographer;
+import android.view.HapticFeedbackConstants;
 import android.view.PixelCopy;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -31,12 +34,31 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private final RemoteViewport pictureInPictureViewport = new RemoteViewport();
     private boolean pictureInPicture;
     private int frameWidth = 16, frameHeight = 9;
-    private float x = .5f, y = .5f, scrollY;
+    private float x = .5f, y = .5f;
     private boolean dragging, twoFinger, relative, pinching, viewportPanActive;
     private float lastX,lastY,twoFingerX,twoFingerY;
     private float pinchSpan;
     private long touchRevision;
     private boolean suppressPointerGesture;
+    // Touchpad mode: a long press holds the left button for dragging.
+    private boolean longPressDrag;
+    // A quick two-finger tap is a right click.
+    private boolean twoFingerTap;
+    private long firstDownTime;
+    private float tapStartX, tapStartY;
+    private final float touchSlop;
+    private final TwoFingerScroll twoFingerScroll = new TwoFingerScroll();
+    private final TwoFingerScroll.Sink scrollSink;
+    private final Choreographer.FrameCallback flingFrame = new Choreographer.FrameCallback() {
+        @Override public void doFrame(long frameTimeNanos) {
+            if (twoFingerScroll.step(SystemClock.uptimeMillis(), scrollSink))
+                Choreographer.getInstance().postFrameCallback(this);
+        }
+    };
+    private void stopFling() {
+        Choreographer.getInstance().removeFrameCallback(flingFrame);
+        twoFingerScroll.cancel();
+    }
     void setRelative(boolean value) { releaseMouse(); relative=value; }
     void setPictureInPicture(boolean value) {
         if(pictureInPicture==value)return;
@@ -45,12 +67,13 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     Rect pictureInPictureBounds() {
         Rect bounds=new Rect();video.getGlobalVisibleRect(bounds);return bounds;
     }
-    void releaseMouse() { mouseInput.releaseAll(); dragging=false; suppressPointerGesture=true; }
+    void releaseMouse() { stopFling(); mouseInput.releaseAll(); dragging=longPressDrag=twoFingerTap=false; suppressPointerGesture=true; }
     private boolean suppressPointerGesture() {
         return suppressPointerGesture || mouseInput.hasVirtualButton() || touchRevision != mouseInput.revision();
     }
     RemoteVideoView(Context context, NativeSession session) {
         super(context); this.session = session;
+        scrollSink = (amount, precise) -> session.pointer(x, y, precise ? 9 : 7, amount);
         mouseInput = new RemoteMouseInput(this::sendMouse);
         mouseInput.relativeMotion = this::moveRelative;
         setBackgroundColor(Color.BLACK);
@@ -64,7 +87,16 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
             @Override public boolean onSingleTapUp(MotionEvent e) {
                 if (!twoFinger && !suppressPointerGesture() && point(e)) cursor.performClick(); return true;
             }
-            @Override public void onLongPress(MotionEvent e) { if (!twoFinger && !dragging && !suppressPointerGesture() && point(e)) click(3, 4); }
+            @Override public void onLongPress(MotionEvent e) {
+                if (twoFinger || dragging || suppressPointerGesture() || !point(e)) return;
+                if (usesRelativeMotion(e)) {
+                    // Touchpad: hold the left button so moving drags windows or selects.
+                    mouseInput.gestureLeft(true); dragging = longPressDrag = true;
+                    performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+                } else {
+                    click(3, 4);
+                }
+            }
             @Override public boolean onScroll(MotionEvent first, MotionEvent current, float dx, float dy) {
                 if (twoFinger) return true;
                 if (!usesRelativeMotion(current) && !dragging && !suppressPointerGesture()) {
@@ -77,7 +109,8 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         // Let the remote desktop detect double-clicks; the default listener consumes the second tap.
         gestures.setOnDoubleTapListener(null);
         // Detect a change in finger spacing even when the fingers start close together.
-        pinchSlop = ViewConfiguration.get(context).getScaledTouchSlop() * .5f;
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        pinchSlop = touchSlop * .5f;
         cursor.setOnGenericMotionListener((v, event) -> {
             if (!point(event)) return true;
             if (event.getActionMasked() == MotionEvent.ACTION_SCROLL) {
@@ -86,7 +119,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
             }
             return true;
         });
-        setContentDescription(L10n.tr("远程桌面：轻触点击，拖动移动，长按右键，双指捏合缩放，放大后双指拖动画面，原始比例下双指上下滑动滚动"));
+        setContentDescription(L10n.tr("远程桌面：轻触点击，双指轻触右键，双指上下滑动滚动，双指捏合缩放；触控板模式下长按后拖动可拖拽窗口"));
     }
     void videoSize(int width, int height) {
         if (width <= 0 || height <= 0) return;
@@ -174,12 +207,18 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
     private boolean touch(MotionEvent e) {
         int action = e.getActionMasked();
         if (action == MotionEvent.ACTION_DOWN) {
-            twoFinger = pinching = viewportPanActive = false;
+            stopFling();
+            twoFinger = pinching = viewportPanActive = longPressDrag = twoFingerTap = false;
+            firstDownTime = e.getEventTime();
             touchRevision = mouseInput.revision();
             suppressPointerGesture = mouseInput.hasVirtualButton();
         }
         if (action == MotionEvent.ACTION_POINTER_DOWN) {
             if (dragging) { mouseInput.gestureLeft(false); dragging = false; }
+            longPressDrag = false;
+            // Both fingers must land together to count as a tap.
+            twoFingerTap = !twoFinger && e.getPointerCount() == 2 && e.getEventTime() - firstDownTime < 250;
+            if (e.getPointerCount() > 2) twoFingerTap = false;
             twoFinger = true;
             MotionEvent cancel = MotionEvent.obtain(e); cancel.setAction(MotionEvent.ACTION_CANCEL);
             gestures.onTouchEvent(cancel); cancel.recycle();
@@ -192,10 +231,17 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
                 if (point(e)) click(3,4); return true;
             }
             gestures.onTouchEvent(e);
+            // GestureDetector stops reporting movement after a long press.
+            if (longPressDrag && action == MotionEvent.ACTION_MOVE) point(e);
+        }
+        if (action == MotionEvent.ACTION_UP && twoFingerTap && !pinching && !twoFingerScroll.scrolling() &&
+                e.getEventTime() - firstDownTime < 350 && !suppressPointerGesture()) {
+            click(3, 4);
         }
         if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
             if (dragging) mouseInput.gestureLeft(false);
-            dragging = false;
+            dragging = longPressDrag = twoFingerTap = false;
+            if (action == MotionEvent.ACTION_CANCEL) stopFling();
             viewport.finishGesture(); applyViewport();
             viewportPanActive = false;
         }
@@ -220,38 +266,52 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         }
         float span = Math.max(pinchSlop, 2 * radiusSum / count);
         boolean canMoveViewport = !mouseInput.hasVirtualButton() && viewport.width() > 0;
+        float density = getResources().getDisplayMetrics().density;
+        if (action == MotionEvent.ACTION_POINTER_DOWN && twoFingerTap) { tapStartX = focusX; tapStartY = focusY; }
         if (action == MotionEvent.ACTION_MOVE && canMoveViewport) {
-            moveTwoFingers(focusX, focusY, span);
+            if (Math.hypot(focusX - tapStartX, focusY - tapStartY) > touchSlop) twoFingerTap = false;
+            moveTwoFingers(focusX, focusY, span, event.getEventTime());
         } else {
             // A change of contacts establishes a new baseline without moving the image.
             pinchSpan = span;
             pinching = pinching && count >= 2 && canMoveViewport;
             viewportPanActive = viewport.isZoomed() && viewport.contains(focusX, focusY);
-            scrollY = focusY;
+            if (count >= 2) {
+                twoFingerScroll.begin(focusX / density, focusY / density, event.getEventTime(),
+                    session.supportsPreciseWheel());
+            } else if (twoFingerScroll.release(event.getEventTime())) {
+                // Keep scrolling with inertia after the fingers lift, like a phone list.
+                Choreographer.getInstance().postFrameCallback(flingFrame);
+            }
         }
         twoFingerX = focusX;
         twoFingerY = focusY;
     }
-    private void moveTwoFingers(float focusX, float focusY, float span) {
-        // Accumulate small span changes until the pinch threshold is crossed.
-        if (Math.abs(span - pinchSpan) >= pinchSlop) pinching = true;
+    private void moveTwoFingers(float focusX, float focusY, float span, long time) {
+        // Accumulate span changes until the pinch threshold is crossed. Unzoomed, two
+        // fingers usually mean scrolling, so require a full touch slop; once a scroll
+        // has started, require a clear pinch so finger drift cannot zoom.
+        float threshold = twoFingerScroll.scrolling() ? touchSlop * 3
+            : viewport.isZoomed() ? pinchSlop : touchSlop;
+        if (!pinching && Math.abs(span - pinchSpan) >= threshold) {
+            pinching = true; twoFingerTap = false; twoFingerScroll.cancel();
+        }
         if (pinching) {
             viewport.zoomBy(span / pinchSpan, twoFingerX, twoFingerY);
             pinchSpan = span;
         }
-        if (pinching || viewport.isZoomed()) {
+        // Touchpad mode pans a zoomed image by pushing the cursor to its edges, so
+        // two fingers always scroll there. Touch mode keeps two-finger panning.
+        if (pinching || (viewport.isZoomed() && !relative)) {
             // Pinches can start in the letterbox. A pan alone starts over the image.
             if (pinching || viewportPanActive || viewport.contains(focusX, focusY)) {
                 viewportPanActive = true;
                 viewport.panBy(focusX - twoFingerX, focusY - twoFingerY);
                 applyViewport();
             }
-        } else if (viewport.contains(focusX, focusY)) {
-            float delta = focusY - scrollY;
-            if (Math.abs(delta) > 16 * getResources().getDisplayMetrics().density) {
-                session.pointer(x, y, 7, delta > 0 ? 1 : -1);
-                scrollY = focusY;
-            }
+        } else if (twoFingerScroll.scrolling() || viewport.contains(focusX, focusY)) {
+            float density = getResources().getDisplayMetrics().density;
+            if (twoFingerScroll.move(focusX / density, focusY / density, time, scrollSink)) twoFingerTap = false;
         }
     }
     @Override public boolean performClick() { super.performClick(); return true; }

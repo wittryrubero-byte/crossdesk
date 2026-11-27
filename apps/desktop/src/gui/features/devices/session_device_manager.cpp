@@ -416,6 +416,16 @@ unsigned SessionDeviceManager::ReleaseMouseButtonMask(unsigned mask) {
 #ifdef _WIN32
 std::string SessionDeviceManager::SendServiceMouseCommand(int x, int y,
                                                          int wheel, int flag) {
+  // The secure-desktop helper only understands notch wheels; reduce smooth
+  // scrolling to whole notches there (sub-notch motion is dropped).
+  if (flag == static_cast<int>(MouseFlag::wheel_vertical_precise) ||
+      flag == static_cast<int>(MouseFlag::wheel_horizontal_precise)) {
+    wheel /= kWheelDelta;
+    if (wheel == 0) return R"({"ok":true})";
+    flag = flag == static_cast<int>(MouseFlag::wheel_vertical_precise)
+               ? static_cast<int>(MouseFlag::wheel_vertical)
+               : static_cast<int>(MouseFlag::wheel_horizontal);
+  }
   std::lock_guard lock(service_mouse_mutex_);
   service_mouse_x_ = x;
   service_mouse_y_ = y;

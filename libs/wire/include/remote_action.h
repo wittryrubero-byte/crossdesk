@@ -48,7 +48,14 @@ enum MouseFlag {
   middle_up,
   wheel_vertical,
   wheel_horizontal,
+  // High-resolution wheel: s is in 1/120 notch units (Windows WHEEL_DELTA),
+  // signed like the legacy flags. Only sent to hosts advertising
+  // supports_precise_wheel; legacy hosts would ignore it.
+  wheel_vertical_precise,
+  wheel_horizontal_precise,
 };
+
+inline constexpr int kWheelDelta = 120;
 
 enum KeyFlag { key_down = 0, key_up };
 enum ServiceCommandFlag { send_sas = 0, lock_workstation };
@@ -152,6 +159,8 @@ struct HostInfo {
   bool supports_file_browser;
   bool supports_file_clipboard;
   int file_clipboard_version;
+  // Optional; host accepts wheel_*_precise mouse flags.
+  bool supports_precise_wheel;
   // Optional; highest live frame rate the host can capture and encode.
   // Absent or invalid values mean the legacy 60 fps ceiling.
   int max_video_frame_rate;

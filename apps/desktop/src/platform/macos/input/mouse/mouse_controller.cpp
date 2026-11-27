@@ -214,6 +214,27 @@ int PlatformMouseController::SendMouseCommand(RemoteAction remote_action,
       mouse_event = CGEventCreateScrollWheelEvent(NULL, kCGScrollEventUnitLine,
                                                   2, 0, remote_action.m.s);
       break;
+    case MouseFlag::wheel_vertical_precise:
+    case MouseFlag::wheel_horizontal_precise: {
+      // Smooth scrolling: s is in 1/120 notch units. Post continuous pixel
+      // scrolls like a trackpad, carrying sub-pixel remainders forward.
+      constexpr double kPixelsPerNotch = 40.0;
+      const bool vertical =
+          remote_action.m.flag == MouseFlag::wheel_vertical_precise;
+      double& remainder = vertical ? scroll_remainder_y_ : scroll_remainder_x_;
+      remainder += std::clamp(remote_action.m.s, -10 * kWheelDelta,
+                              10 * kWheelDelta) *
+                   kPixelsPerNotch / kWheelDelta;
+      const int32_t pixels = static_cast<int32_t>(std::trunc(remainder));
+      remainder -= pixels;
+      if (pixels == 0) return 0;
+      mouse_event = CGEventCreateScrollWheelEvent(
+          NULL, kCGScrollEventUnitPixel, 2, vertical ? pixels : 0,
+          vertical ? 0 : pixels);
+      if (mouse_event)
+        CGEventSetIntegerValueField(mouse_event, kCGScrollWheelEventIsContinuous, 1);
+      break;
+    }
     default:
       if (left_dragging_) {
         mouse_type = kCGEventLeftMouseDragged;

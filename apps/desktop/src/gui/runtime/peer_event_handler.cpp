@@ -658,6 +658,9 @@ std::string GuiRuntime::BuildHostInformation(bool advertise_trust,
   action.i.supports_deskhub_fps15 = true;
   action.i.supports_deskhub_bandwidth = true;
   action.i.max_video_frame_rate = QueryHostMaxVideoFrameRate();
+#if defined(_WIN32) || defined(__APPLE__)
+  action.i.supports_precise_wheel = true;
+#endif
   action.i.supports_file_browser = UserSessionFeaturesAvailable();
 #ifndef __OHOS__
   action.i.supports_file_clipboard = UserSessionFeaturesAvailable();
