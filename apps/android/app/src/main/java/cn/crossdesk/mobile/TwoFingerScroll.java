@@ -31,6 +31,10 @@ final class TwoFingerScroll {
     private long lastTime;
 
     boolean scrolling() { return scrolling; }
+    /** The fingers have travelled past the slop: this gesture is a swipe, not a pinch. */
+    boolean locked() { return locked; }
+    /** Focus travel in dp since the gesture started (before it locks). */
+    float travel(float xDp, float yDp) { return (float) Math.hypot(xDp - startX, yDp - startY); }
     boolean flinging() { return flinging; }
 
     /** Starts a gesture, or re-baselines it when the finger count changes. */

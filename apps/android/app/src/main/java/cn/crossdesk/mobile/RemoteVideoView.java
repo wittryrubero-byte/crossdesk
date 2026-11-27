@@ -289,13 +289,19 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         twoFingerY = focusY;
     }
     private void moveTwoFingers(float focusX, float focusY, float span, long time) {
-        // Accumulate span changes until the pinch threshold is crossed. Unzoomed, two
-        // fingers usually mean scrolling, so require a full touch slop; once a scroll
-        // has started, require a clear pinch so finger drift cannot zoom.
-        float threshold = twoFingerScroll.scrolling() ? touchSlop * 3
-            : viewport.isZoomed() ? pinchSlop : touchSlop;
-        if (!pinching && Math.abs(span - pinchSpan) >= threshold) {
-            pinching = true; twoFingerTap = false; twoFingerScroll.cancel();
+        // Accumulate span changes until the pinch threshold is crossed. Once the
+        // fingers have started sliding together, this gesture can no longer zoom.
+        // Before that, a pinch must change the finger spacing more than the
+        // fingers have travelled, so a slightly uneven swipe never zooms.
+        boolean swipePanMode = viewport.isZoomed() && !relative;
+        if (!pinching && (swipePanMode || !twoFingerScroll.locked())) {
+            float density = getResources().getDisplayMetrics().density;
+            float spanChange = Math.abs(span - pinchSpan);
+            float travel = twoFingerScroll.travel(focusX / density, focusY / density) * density;
+            float threshold = swipePanMode ? pinchSlop : touchSlop;
+            if (spanChange >= threshold && (swipePanMode || spanChange > travel)) {
+                pinching = true; twoFingerTap = false; twoFingerScroll.cancel();
+            }
         }
         if (pinching) {
             viewport.zoomBy(span / pinchSpan, twoFingerX, twoFingerY);

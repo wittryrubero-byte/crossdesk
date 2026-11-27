@@ -77,4 +77,19 @@ public class TwoFingerScrollTest {
         scroll.move(40, 70, 36, sink);
         assertEquals(before + 30, total);
     }
+    @Test public void slidingLocksTheGestureAgainstPinching() {
+        TwoFingerScroll scroll = new TwoFingerScroll();
+        scroll.begin(100, 100, 0, true);
+        scroll.move(101, 104, 16, sink);
+        assertFalse("still undecided inside the slop", scroll.locked());
+        assertEquals(5, Math.round(scroll.travel(103, 104)));
+        scroll.move(100, 112, 32, sink);
+        assertTrue(scroll.locked());
+        // Horizontal swipes also commit the gesture, even though they do not scroll.
+        TwoFingerScroll sideways = new TwoFingerScroll();
+        sideways.begin(0, 0, 0, true);
+        sideways.move(20, 0, 16, sink);
+        assertTrue(sideways.locked());
+        assertFalse(sideways.scrolling());
+    }
 }
