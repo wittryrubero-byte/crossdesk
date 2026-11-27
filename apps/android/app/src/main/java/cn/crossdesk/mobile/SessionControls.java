@@ -74,6 +74,27 @@ final class SessionControls extends FrameLayout {
         ((FrameLayout)orb).removeAllViews();((FrameLayout)orb).addView(brand,new LayoutParams(ui.dp(46),ui.dp(46),Gravity.CENTER));
         orb.setBackground(ui.background(0xFFF5F5F7,27));orb.setElevation(ui.dp(7));addView(orb,new LayoutParams(ui.dp(54),ui.dp(54)));
         drag(orb,orb,()->{if(menu==null)openMenu("controls");else closeMenu();});
+        statusLine=ui.text("",10,false);statusLine.setTextColor(0xE6FFFFFF);statusLine.setSingleLine();
+        statusLine.setPadding(ui.dp(6),ui.dp(2),ui.dp(6),ui.dp(2));statusLine.setBackground(ui.background(0x66000000,6));
+        statusLine.setContentDescription(L10n.tr("网络状态"));statusLine.setOnClickListener(v->openMenu("network"));
+        statusLine.setVisibility(GONE);
+        LayoutParams statusParams=new LayoutParams(LayoutParams.WRAP_CONTENT,LayoutParams.WRAP_CONTENT,Gravity.BOTTOM|Gravity.RIGHT);
+        statusParams.setMargins(0,0,ui.dp(6),ui.dp(4));addView(statusLine,statusParams);
+    }
+    private final TextView statusLine;
+    /** One short line: path · RTT · inbound traffic · frame rate (· loss when noticeable). */
+    private void renderStatusLine(){
+        boolean visible=network!=null&&waiting.getVisibility()==GONE&&!keyboard.isOpen();
+        statusLine.setVisibility(visible?VISIBLE:GONE);
+        if(!visible)return;
+        RemoteNetworkStatistics.Report report=network.report;
+        RemoteNetworkStatistics.Traffic total=report==null?null:report.traffic[3];
+        StringBuilder text=new StringBuilder(report==null?"—":report.mode==0?"P2P":report.mode==1?L10n.tr("中继"):"—");
+        text.append(" · ").append(RemoteNetworkStatistics.latency(network.rtt));
+        text.append(" · ").append(total==null?"—":VideoTrafficEstimate.rate(total.inbound));
+        text.append(" · ").append(network.fps).append(" FPS");
+        if(total!=null&&Double.isFinite(total.loss)&&total.loss>=.01)text.append(" · ").append(L10n.tr("丢包")).append(" ").append(RemoteNetworkStatistics.loss(total.loss));
+        statusLine.setText(text);
     }
     void setRelative(boolean value){relative=value;if(menu!=null&&menuPage.equals("controls"))openMenu("controls");}
     void setHostPlatform(String platform){
@@ -114,13 +135,13 @@ final class SessionControls extends FrameLayout {
     void setMuted(boolean value){muted=value;if(menu!=null&&menuPage.equals("controls"))openMenu("controls");}
     void videoSize(int width,int height){waiting.setVisibility(GONE);positionMouse();}
     void resetVideoStatistics(){statistics(new RemoteNetworkStatistics.Snapshot(network.report,0,0,0,Double.NaN,network.rtt,network.remoteEncoder,network.localDecoder));}
-    void statistics(RemoteNetworkStatistics.Snapshot value){network=value;renderNetwork();}
+    void statistics(RemoteNetworkStatistics.Snapshot value){network=value;renderNetwork();renderStatusLine();}
     void videoSettings(RemoteVideoSettings value){
         settings=value;
         for(SettingRow row:settingRows)if(row.field==1&&!java.util.Arrays.equals(row.values,value.frameRates())){openMenu(menuPage);return;}
         renderVideoSettings();
     }
-    void displayResolutions(RemoteDisplayResolutions value,int display){resolutions=value;resolutionDisplay=display;renderResolutions();}
+    void displayResolutions(RemoteDisplayResolutions value,int display){resolutions=value;resolutionDisplay=display;renderResolutions();renderVideoSettings();}
     void privacyScreen(RemotePrivacyScreen value){privacy=value;renderPrivacy();}
     void fileStatus(String status,boolean received){transferStatus=status;hasReceivedFile=received;renderFileStatus();}
     private void renderFileStatus(){
@@ -183,7 +204,10 @@ final class SessionControls extends FrameLayout {
             settingRows.add(new SettingRow(body,0,L10n.tr("画面质量"),new String[]{L10n.tr("低"),L10n.tr("中"),L10n.tr("高")},new int[]{0,1,2}));ui.gap(body,12);
             int[] rates=settings.frameRates();String[] rateLabels=new String[rates.length];for(int i=0;i<rates.length;i++)rateLabels[i]=rates[i]+" fps";
             settingRows.add(new SettingRow(body,1,L10n.tr("画面采集帧率"),rateLabels,rates));ui.gap(body,12);
-            settingRows.add(new SettingRow(body,2,L10n.tr("画面偏好"),RemoteVideoSettings.preferences(),new int[]{0,1,2}));renderVideoSettings();
+            settingRows.add(new SettingRow(body,2,L10n.tr("画面偏好"),RemoteVideoSettings.preferences(),new int[]{0,1,2}));
+            TextView trafficNote=ui.text(L10n.tr("流量为画面变化时的估算值；画面静止时几乎不耗流量，网速很快时最高约 2.5 MB/s。"),10,false);
+            trafficNote.setTextColor(SECONDARY);trafficNote.setPadding(0,ui.dp(8),0,0);body.addView(trafficNote);
+            renderVideoSettings();
         }
         ui.gap(menu,9);TextView disconnect=ui.action(L10n.tr("断开连接"),Color.WHITE,()->{closeMenu();closeKeyboard();actions.disconnect();});disconnect.setMinHeight(ui.dp(34));disconnect.setTextSize(14);disconnect.setBackground(ui.background(RED,8));menu.addView(disconnect,ui.size(-1,34));
         addView(menu,new LayoutParams(panelWidth(getWidth()),panelHeight(getHeight())));orb.bringToFront();orb.setContentDescription(L10n.tr("收起远程控制菜单"));
@@ -204,6 +228,7 @@ final class SessionControls extends FrameLayout {
     }
     private final class SettingRow {
         final int field;final int[] values;final SegmentedControl group;
+        private TextView[] traffic;
         SettingRow(LinearLayout body,int field,String title,String[] labels,int[] values){
             this.field=field;this.values=values;
             TextView label=ui.text(title,12,false);label.setTextColor(SECONDARY);body.addView(label);ui.gap(body,5);
@@ -213,11 +238,31 @@ final class SessionControls extends FrameLayout {
                 TextView button=(TextView)group.getChildAt(i);button.setTextSize(12);button.setMinHeight(ui.dp(28));button.setSingleLine();button.setAutoSizeTextTypeUniformWithConfiguration(9,12,1,android.util.TypedValue.COMPLEX_UNIT_SP);button.setContentDescription(title+"，"+labels[i]);
                 button.setLayoutParams(new LinearLayout.LayoutParams(0,ui.dp(28),1));
             }
+            if(field==0||field==1){
+                // Estimated traffic per option, aligned under each segment.
+                LinearLayout row=ui.row();row.setPadding(ui.dp(2),ui.dp(3),ui.dp(2),0);traffic=new TextView[values.length];
+                for(int i=0;i<values.length;i++){
+                    TextView cell=ui.text("",10,false);cell.setTextColor(SECONDARY);cell.setGravity(Gravity.CENTER);cell.setSingleLine();
+                    cell.setAutoSizeTextTypeUniformWithConfiguration(7,10,1,android.util.TypedValue.COMPLEX_UNIT_SP);
+                    traffic[i]=cell;row.addView(cell,new LinearLayout.LayoutParams(0,ui.dp(14),1));
+                }
+                body.addView(row);
+            }
+        }
+        long estimate(int index){
+            RemoteDisplayResolutions.Display display=resolutions.display(resolutionDisplay);
+            int width=display==null?0:display.current.width,height=display==null?0:display.current.height;
+            RemoteVideoSettings.Values current=settings.selection;
+            return VideoTrafficEstimate.bitsPerSecond(field==0?values[index]:current.quality,field==1?values[index]:current.frameRate,
+                current.preference,width,height);
         }
         int selectionIndex(){int selected=field==0?settings.selection.quality:field==1?settings.selection.frameRate:settings.selection.preference;
             for(int i=0;i<values.length;i++)if(values[i]==selected)return i;return 0;
         }
-        void render(){group.setSelection(selectionIndex());group.setOptionsEnabled(settings.supported);}
+        void render(){
+            group.setSelection(selectionIndex());group.setOptionsEnabled(settings.supported);
+            if(traffic!=null)for(int i=0;i<traffic.length;i++)traffic[i].setText("≈"+VideoTrafficEstimate.megabytesPerSecond(estimate(i)));
+        }
     }
     private void renderResolutions(){
         if(resolutionButton==null)return;
