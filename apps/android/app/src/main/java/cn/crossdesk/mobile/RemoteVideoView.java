@@ -76,6 +76,7 @@ final class RemoteVideoView extends FrameLayout implements SurfaceHolder.Callbac
         scrollSink = (amount, precise) -> session.pointer(x, y, precise ? 9 : 7, amount);
         mouseInput = new RemoteMouseInput(this::sendMouse);
         mouseInput.relativeMotion = this::moveRelative;
+        mouseInput.preciseWheelSupport = session::supportsPreciseWheel;
         setBackgroundColor(Color.BLACK);
         video = new SurfaceView(context); video.getHolder().addCallback(this);
         addView(video, new LayoutParams(1, 1, android.view.Gravity.CENTER));

@@ -12,7 +12,13 @@ final class RemoteMouseInput {
     Runnable didCancel;
     float viewportWidth, viewportHeight;
 
+    /** True when the host accepts smooth (1/120 notch) wheel units. */
+    java.util.function.BooleanSupplier preciseWheelSupport;
+
     RemoteMouseInput(Sender sender) { this.sender = sender; }
+    boolean preciseWheel() { return preciseWheelSupport != null && preciseWheelSupport.getAsBoolean(); }
+    /** Smooth vertical wheel in 1/120 notch units; positive scrolls up. */
+    void scrollPrecise(int units) { if (units != 0) send(9, units); }
     boolean hasVirtualButton() { return virtualLeft || virtualRight; }
     long revision() { return revision; }
     void move(float x, float y) {

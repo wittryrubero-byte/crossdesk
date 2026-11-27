@@ -15,14 +15,19 @@ import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
-/** Touch ownership continues outside the original key bounds. */
+/**
+ * A slim, draggable scroll wheel. Clicks and drags use touch gestures on the
+ * video (tap, two-finger tap, long press), so the bar keeps only the wheel to
+ * leave as much of the remote screen visible as possible.
+ */
 @SuppressLint("ViewConstructor")
 final class VirtualMouseBar extends LinearLayout {
-    static final int WIDTH_DP = 140, HEIGHT_DP = 68;
+    static final int WIDTH_DP = 36, HEIGHT_DP = 104;
+    private static final int HANDLE_DP = 18;
     final FrameLayout dragHandle;
     private final RemoteMouseInput input;
     private final MobileUi ui;
-    private final TextView[] keys = new TextView[3];
+    private final WheelKey wheel;
     private int generation;
 
     VirtualMouseBar(MobileUi ui, RemoteMouseInput input) {
@@ -31,64 +36,54 @@ final class VirtualMouseBar extends LinearLayout {
         GradientDrawable shell = ui.background(Color.WHITE, 18);
         shell.setStroke(ui.dp(.5f), 0xFFD4DAE2);
         setBackground(shell);
-        setMotionEventSplittingEnabled(true);
+        // Let the remote screen show through the bar a little.
+        setAlpha(.82f);
         dragHandle = new FrameLayout(ui.context);
-        dragHandle.setContentDescription(L10n.tr("拖动虚拟鼠标"));
+        dragHandle.setContentDescription(L10n.tr("拖动滚轮"));
         View grip = new View(ui.context);
         grip.setBackground(ui.background(MobileUi.SECONDARY, 2));
-        dragHandle.addView(grip, new FrameLayout.LayoutParams(ui.dp(28), ui.dp(3), Gravity.CENTER));
-        addView(dragHandle, new LayoutParams(LayoutParams.MATCH_PARENT, ui.dp(20)));
-        LinearLayout row = ui.row();
-        row.setPadding(ui.dp(4), 0, ui.dp(4), 0);
-        row.setMotionEventSplittingEnabled(true);
-        addView(row, new LayoutParams(LayoutParams.MATCH_PARENT, ui.dp(48)));
-        keys[0] = key(L10n.tr("鼠标左键，按住并拖动，松开结束拖拽"), 0);
-        keys[1] = key(L10n.tr("鼠标滚轮，上下滑动，可滑出按键范围"), 1);
-        keys[2] = key(L10n.tr("鼠标右键，按住并拖动，松开结束拖拽"), 2);
-        for (TextView key : keys) row.addView(key, new LayoutParams(0, ui.dp(44), 1));
+        dragHandle.addView(grip, new FrameLayout.LayoutParams(ui.dp(16), ui.dp(3), Gravity.CENTER));
+        addView(dragHandle, new LayoutParams(LayoutParams.MATCH_PARENT, ui.dp(HANDLE_DP)));
+        wheel = new WheelKey(ui);
+        setUpWheel();
+        LayoutParams wheelParams = new LayoutParams(LayoutParams.MATCH_PARENT, 0, 1);
+        wheelParams.bottomMargin = ui.dp(4);
+        addView(wheel, wheelParams);
         input.didCancel = this::resetTouches;
-        setContentDescription(L10n.tr("虚拟鼠标"));
+        setContentDescription(L10n.tr("滚轮"));
     }
 
-    @SuppressLint("ClickableViewAccessibility") // Touch sends real down/up; performClick serves accessibility only.
-    private TextView key(String description, int index) {
-        TextView key = index == 1 ? new WheelKey(ui) : new TextView(ui.context);
-        key.setGravity(android.view.Gravity.CENTER);
-        key.setContentDescription(description);
-        key.setClickable(true); key.setFocusable(true);
-        highlight(key, index, false);
-        key.setOnClickListener(v -> {
-            if (index == 1) { ((WheelKey)key).advance(ui.dp(10)); input.scroll(-1); }
-            else { input.virtualButton(index == 0, true); input.virtualButton(index == 0, false); }
+    @SuppressLint("ClickableViewAccessibility") // Touch scrolls; performClick serves accessibility only.
+    private void setUpWheel() {
+        wheel.setContentDescription(L10n.tr("鼠标滚轮，上下滑动，可滑出按键范围"));
+        wheel.setClickable(true); wheel.setFocusable(true);
+        highlight(false);
+        wheel.setOnClickListener(v -> { wheel.advance(ui.dp(10)); input.scroll(-1); });
+        wheel.setAccessibilityDelegate(new View.AccessibilityDelegate() {
+            @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
+                super.onInitializeAccessibilityNodeInfo(host, info);
+                info.setScrollable(true);
+                info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD);
+                info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
+            }
+            @Override public boolean performAccessibilityAction(View host, int action, android.os.Bundle args) {
+                if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
+                    int direction = action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ? -1 : 1;
+                    wheel.advance(-direction * ui.dp(10));
+                    input.scroll(direction); return true;
+                }
+                return super.performAccessibilityAction(host, action, args);
+            }
         });
-        if (index == 1) {
-            key.setAccessibilityDelegate(new View.AccessibilityDelegate() {
-                @Override public void onInitializeAccessibilityNodeInfo(View host, android.view.accessibility.AccessibilityNodeInfo info) {
-                    super.onInitializeAccessibilityNodeInfo(host, info);
-                    info.setScrollable(true);
-                    info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_FORWARD);
-                    info.addAction(android.view.accessibility.AccessibilityNodeInfo.AccessibilityAction.ACTION_SCROLL_BACKWARD);
-                }
-                @Override public boolean performAccessibilityAction(View host, int action, android.os.Bundle args) {
-                    if (action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD || action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD) {
-                        int direction = action == android.view.accessibility.AccessibilityNodeInfo.ACTION_SCROLL_FORWARD ? -1 : 1;
-                        ((WheelKey)key).advance(-direction * ui.dp(10));
-                        input.scroll(direction); return true;
-                    }
-                    return super.performAccessibilityAction(host, action, args);
-                }
-            });
-        }
-        key.setOnTouchListener(new View.OnTouchListener() {
+        wheel.setOnTouchListener(new View.OnTouchListener() {
             int pointer = -1, startedGeneration;
-            float lastX, lastY, remainder;
+            float lastY, remainder;
             @Override public boolean onTouch(View v, MotionEvent event) {
                 int action = event.getActionMasked();
                 if (action == MotionEvent.ACTION_DOWN) {
                     pointer = event.getPointerId(0); startedGeneration = generation;
-                    lastX = event.getRawX(); lastY = event.getRawY(); remainder = 0;
-                    highlight(key, index, true);
-                    if (index != 1) input.virtualButton(index == 0, true);
+                    lastY = event.getRawY(); remainder = 0;
+                    highlight(true);
                     return true;
                 }
                 if (startedGeneration != generation || pointer == -1) return true;
@@ -96,55 +91,53 @@ final class VirtualMouseBar extends LinearLayout {
                     int p = event.findPointerIndex(pointer);
                     if (p < 0) return true;
                     // Use screen coordinates even if another finger moves the bar.
-                    float x = event.getRawX() + (event.getX(p) - event.getX());
                     float y = event.getRawY() + (event.getY(p) - event.getY());
-                    float dx = x - lastX, dy = y - lastY;
-                    lastX = x; lastY = y;
-                    if (index != 1) { input.drag(dx, dy); return true; }
-                    ((WheelKey)key).advance(dy);
-                    remainder += dy;
-                    float step = ui.dp(10);
-                    int ticks = (int)(remainder / step);
-                    // Positive protocol wheel values scroll up; finger-down scrolls down.
-                    for (int i = 0; i < Math.min(Math.abs(ticks), 32); i++) input.scroll(ticks > 0 ? -1 : 1);
-                    remainder -= ticks * step;
+                    float dy = y - lastY;
+                    lastY = y;
+                    wheel.advance(dy);
+                    // Like a mouse wheel: finger down scrolls the page down (negative wheel).
+                    if (input.preciseWheel()) {
+                        remainder -= dy / ui.dp(1) * TwoFingerScroll.UNITS_PER_DP;
+                        int units = (int) remainder;
+                        if (units != 0) { remainder -= units; input.scrollPrecise(units); }
+                    } else {
+                        remainder += dy;
+                        float step = ui.dp(10);
+                        int ticks = (int)(remainder / step);
+                        for (int i = 0; i < Math.min(Math.abs(ticks), 32); i++) input.scroll(ticks > 0 ? -1 : 1);
+                        remainder -= ticks * step;
+                    }
                 }
                 if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL ||
                     (action == MotionEvent.ACTION_POINTER_UP && event.getPointerId(event.getActionIndex()) == pointer)) {
-                    if (index != 1) input.virtualButton(index == 0, false);
-                    pointer = -1; remainder = 0; highlight(key, index, false);
+                    pointer = -1; remainder = 0; highlight(false);
                 }
                 return true;
             }
         });
-        return key;
     }
-    private void highlight(TextView key, int index, boolean pressed) {
-        key.setPressed(pressed);
-        key.setTextColor(pressed ? Color.WHITE : 0xB8303640);
-        // Narrow only the wheel's visible face; its 44 × 44 dp target remains.
-        GradientDrawable face = ui.background(pressed ? MobileUi.BLUE : 0xFFEDF0F4, 6);
-        float left = ui.dp(index == 0 ? 14 : 6), right = ui.dp(index == 2 ? 14 : 6);
-        face.setCornerRadii(new float[]{left,left,right,right,right,right,left,left});
-        int horizontal = ui.dp(index == 1 ? 13 : 1), vertical = ui.dp(index == 1 ? 7 : 2);
-        key.setBackground(new InsetDrawable(face, horizontal, vertical, horizontal, vertical));
+    private void highlight(boolean pressed) {
+        wheel.setPressed(pressed);
+        wheel.setTextColor(pressed ? Color.WHITE : 0xB8303640);
+        GradientDrawable face = ui.background(pressed ? MobileUi.BLUE : 0xFFEDF0F4, 8);
+        int inset = ui.dp(5);
+        wheel.setBackground(new InsetDrawable(face, inset, 0, inset, 0));
     }
     void cancelInput() {
         input.releaseAll();
     }
     private void resetTouches() {
         generation++;
-        for (int i=0;i<keys.length;i++) if (keys[i] != null) highlight(keys[i], i, false);
+        highlight(false);
     }
     /** Flat, uniformly colored treads follow the finger, wrapping every 5 dp. */
     private static final class WheelKey extends TextView {
         private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Path clip = new Path();
         private final float density;
-        private float phase = 2;
+        private float phase = 2, clipHeight;
         WheelKey(MobileUi ui) {
             super(ui.context); density = getResources().getDisplayMetrics().density;
-            clip.addRoundRect(new RectF(0,0,12,24),2,2,Path.Direction.CW);
         }
         void advance(float distance) {
             phase = (phase + distance / density * .65f) % 5;
@@ -152,12 +145,17 @@ final class VirtualMouseBar extends LinearLayout {
         }
         @Override protected void onDraw(Canvas canvas) {
             super.onDraw(canvas);
+            float height = Math.max(0, getHeight() / density - 16);
+            if (height != clipHeight) {
+                clipHeight = height; clip.reset();
+                clip.addRoundRect(new RectF(0, 0, 12, height), 2, 2, Path.Direction.CW);
+            }
             canvas.save();
-            canvas.translate((getWidth()-12*density)/2f, (getHeight()-24*density)/2f);
+            canvas.translate((getWidth()-12*density)/2f, 8*density);
             canvas.scale(density,density);
             canvas.clipPath(clip);
             paint.setColor(getCurrentTextColor());
-            for (int i=-1;i<=6;i++) {
+            for (int i=-1;i<=height/5+1;i++) {
                 float y=i*5+phase;
                 canvas.drawRect(0,y,12,y+1.5f,paint);
             }

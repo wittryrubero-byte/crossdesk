@@ -157,7 +157,7 @@ final class SessionControls extends FrameLayout {
             scroll.setScrollBarStyle(View.SCROLLBARS_OUTSIDE_INSET);body.setPadding(0,0,ui.dp(6),0);
         }
         if(page.equals("controls")){
-            String[] labels={L10n.tr("键盘"),mouseVisible?L10n.tr("收起鼠标"):L10n.tr("虚拟鼠标"),relative?L10n.tr("相对鼠标"):L10n.tr("绝对鼠标"),L10n.tr("显示器"),L10n.tr("画面设置"),muted?L10n.tr("静音"):L10n.tr("声音"),L10n.tr("发送文件"),L10n.tr("网络状态"),"Ctrl+Alt+Del",L10n.tr("剪贴板"),L10n.tr("隐私屏")};
+            String[] labels={L10n.tr("键盘"),mouseVisible?L10n.tr("收起滚轮"):L10n.tr("滚轮"),relative?L10n.tr("相对鼠标"):L10n.tr("绝对鼠标"),L10n.tr("显示器"),L10n.tr("画面设置"),muted?L10n.tr("静音"):L10n.tr("声音"),L10n.tr("发送文件"),L10n.tr("网络状态"),"Ctrl+Alt+Del",L10n.tr("剪贴板"),L10n.tr("隐私屏")};
             String[] icons={"keyboard","mouse","mouse","display","sliders","audio","folder","chart","lock","clipboard","eye"};
             Runnable[] clicks={()->{closeMenu();toggleKeyboard();},this::toggleMouse,actions::mouse,actions::display,()->openMenu("video"),actions::mute,actions::sendFile,()->openMenu("network"),actions::secureAttention,actions::clipboard,actions::togglePrivacy};
             menuColumns=controlColumns();
