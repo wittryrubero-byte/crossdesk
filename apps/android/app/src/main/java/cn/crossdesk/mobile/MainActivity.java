@@ -550,7 +550,11 @@ public final class MainActivity extends Activity implements NativeSession.Listen
             public void mute(){muted=!muted;if(session!=null)session.control(2,muted?0:1);controls.setMuted(muted);}
             public void mouse(){boolean relative=!preferences.getBoolean("relativeMouse",true);preferences.edit().putBoolean("relativeMouse",relative).apply();video.setRelative(relative);controls.setRelative(relative);}
             public void displayResolution(RemoteDisplayResolutions.Mode mode){updateDisplayResolution(mode);}
-            public void videoSettings(int field,int value){RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;updateVideoSettings(new RemoteVideoSettings.Values(field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference));}
+            public void videoSettings(int field,int value){
+                // Remember quality and frame rate for the next connection.
+                if(field==0)preferences.edit().putInt("videoQuality",value).apply();
+                else if(field==1)preferences.edit().putInt("videoFrameRate",value).apply();
+                RemoteVideoSettings.Values old=MainActivity.this.videoSettings.selection;updateVideoSettings(new RemoteVideoSettings.Values(field==0?value:old.quality,field==1?value:old.frameRate,field==2?value:old.preference));}
         });controls.setHostPlatform(hostPlatform);controls.setRelative(preferences.getBoolean("relativeMouse",true));controls.setMuted(muted);controls.videoSettings(videoSettings);controls.displayResolutions(displayResolutions,selectedDisplay);root.addView(controls,new LinearLayout.LayoutParams(-1,-1));getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         controls.attachMouseBar(safeArea,safeArea.indexOfChild(root),new VirtualMouseBar(ui,video.mouseInput));
         privacyChanged();
@@ -585,7 +589,7 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         LinearLayout content=formPage("settings",L10n.tr("设置"),()->home(""));
         LinearLayout mouse=section(content,L10n.tr("鼠标控制"),MobileUi.SETTINGS_CARD_RADIUS);mouse.setPadding(dp(12),dp(12),dp(12),dp(12));boolean relative=preferences.getBoolean("relativeMouse",true);
         mouse.addView(segments(new String[]{L10n.tr("相对位置"),L10n.tr("绝对位置")},relative?0:1,true,index->preferences.edit().putBoolean("relativeMouse",index==0).apply()));
-        LinearLayout picture=section(content,L10n.tr("画面偏好"),MobileUi.SETTINGS_CARD_RADIUS);picture.setPadding(dp(12),dp(12),dp(12),dp(12));int preference=Math.max(0,Math.min(2,preferences.getInt("videoPreference",1)));
+        LinearLayout picture=section(content,L10n.tr("画面偏好"),MobileUi.SETTINGS_CARD_RADIUS);picture.setPadding(dp(12),dp(12),dp(12),dp(12));int preference=Math.max(0,Math.min(2,preferences.getInt("videoPreference",0)));
         picture.addView(segments(RemoteVideoSettings.preferences(),preference,true,index->preferences.edit().putInt("videoPreference",index).apply()));ui.gap(content,28);
         LinearLayout direction=section(content,L10n.tr("屏幕方向"),MobileUi.SETTINGS_CARD_RADIUS);LinearLayout directionRow=row();directionRow.setPadding(dp(16),dp(10),dp(16),dp(10));directionRow.addView(text(L10n.tr("连接建立后锁定横屏"),16,false),new LinearLayout.LayoutParams(0,-2,1));
         Switch autoLandscape=new Switch(this);autoLandscape.setContentDescription(L10n.tr("连接建立后锁定横屏"));autoLandscape.setChecked(preferences.getBoolean("autoLandscape",false));autoLandscape.setOnCheckedChangeListener((button,checked)->preferences.edit().putBoolean("autoLandscape",checked).apply());directionRow.addView(autoLandscape);direction.addView(directionRow);
@@ -929,7 +933,9 @@ public final class MainActivity extends Activity implements NativeSession.Listen
         cancelDisplayResolutionTimeout();displayResolutions=new RemoteDisplayResolutions();
         cancelVideoSettingsTimeout();
         android.util.DisplayMetrics metrics=getResources().getDisplayMetrics();
-        videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",1),Math.max(metrics.widthPixels,metrics.heightPixels));
+        // Default to frame-rate priority: a smooth picture matters most for remote control.
+        videoSettings=new RemoteVideoSettings(preferences.getInt("videoPreference",0),Math.max(metrics.widthPixels,metrics.heightPixels),
+            preferences.getInt("videoQuality",-1),preferences.getInt("videoFrameRate",0));
         videoSettings.deviceMaxFrameRate=displayMaxRefreshRate();
     }
     /** Fastest refresh rate the panel offers (e.g. 120 on high-refresh phones). */

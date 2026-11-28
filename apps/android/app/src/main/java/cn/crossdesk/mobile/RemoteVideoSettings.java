@@ -31,6 +31,16 @@ final class RemoteVideoSettings {
     Values selection,applied;
     long requestId,appliedRequestId;
     RemoteVideoSettings(int preference){this(preference,1920);}
+    /**
+     * Starts from the quality and frame rate the user last chose (if any).
+     * Without a saved choice it starts at 60 fps: smoothness matters more than
+     * the small extra decoding cost on current phones.
+     */
+    RemoteVideoSettings(int preference,int displayLongEdge,int savedQuality,int savedFrameRate){
+        int quality=savedQuality>=0&&savedQuality<=2?savedQuality:displayLongEdge>0&&displayLongEdge<=1280?0:1;
+        int frameRate=supportedRate(savedFrameRate)?savedFrameRate:60;
+        selection=applied=new Values(quality,frameRate,preference>=0&&preference<=2?preference:0);
+    }
     RemoteVideoSettings(int preference,int displayLongEdge){
         // Start within common mobile decoder limits. Hardware availability and
         // maximum resolution vary, and AV1 may still need software fallback.

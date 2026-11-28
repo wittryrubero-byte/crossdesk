@@ -30,4 +30,13 @@ public class VideoSettingsTest {
         state.setHostMaxFrameRate(60);assertEquals(60,state.selection.frameRate);
         state.setHostMaxFrameRate(0);assertEquals(60,state.maxFrameRate);
     }
+    @Test public void sessionsStartSmoothAndRememberChoices(){
+        RemoteVideoSettings fresh=new RemoteVideoSettings(0,2400,-1,0);
+        same(new RemoteVideoSettings.Values(1,60,0),fresh.selection);
+        RemoteVideoSettings saved=new RemoteVideoSettings(0,2400,2,120);
+        same(new RemoteVideoSettings.Values(2,120,0),saved.selection);
+        saved.setHostMaxFrameRate(60);
+        assertEquals(60,saved.selection.frameRate);
+        same(new RemoteVideoSettings.Values(0,60,0),new RemoteVideoSettings(9,1200,-1,75).selection);
+    }
 }
