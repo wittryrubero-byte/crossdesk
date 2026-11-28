@@ -241,14 +241,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Personal fork: hosted Apple silicon runners are rarely available,
-          # so build the Intel package; it runs on Apple silicon via Rosetta.
-          - arch: x64
-            binary_arch: x86_64
-            runner: macos-26-intel
-            cache-key: intel-macos26-xcode26.6-min14
-            out-dir: ./build/macosx/x86_64/release/crossdesk
-            package_script: ./apps/desktop/scripts/macos/pkg_x64.sh
+          # Personal fork: native Apple silicon package.
+          - arch: arm64
+            binary_arch: arm64
+            runner: macos-26
+            cache-key: arm-macos26-xcode26.6-min14
+            out-dir: ./build/macosx/arm64/release/crossdesk
+            package_script: ./apps/desktop/scripts/macos/pkg_arm64.sh
 
     steps:
       - name: Validate macOS signing secrets
